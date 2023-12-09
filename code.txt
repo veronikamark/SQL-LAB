@@ -1,0 +1,261 @@
+package kursova;
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
+import java.awt.*;
+import java.text.DecimalFormat;
+import javax.swing.table.DefaultTableCellRenderer;
+
+public class RestaurantProductsGUI extends JFrame {
+
+    private JTable table;
+    private DefaultTableModel tableModel;
+    private JLabel totalCostLabel;
+    private JLabel additionalCostLabel;
+
+    public RestaurantProductsGUI() {
+        setTitle("Таблиця продуктів ресторану");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(800, 400);
+
+        // Create the table model
+        tableModel = new DefaultTableModel(new Object[][]{},
+                new String[]{"Назва продукту", "Ціна закупівлі", "Телефон постачальника",
+                        "Необхідна кількість (кг)", "Наявна кількість (кг)", "Наявна кількість (%)"}) {
+            @Override
+            public Class<?> getColumnClass(int column) {
+                if (column == 4 || column == 5) {
+                    return Double.class; // Set the class for the "Наявна кількість (кг)" and "Наявна кількість (%)" columns as Double
+                }
+                return Object.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == 4; // Allow editing only for the "Наявна кількість (кг)" column
+            }
+        };
+        
+        // Add the initial products
+        addInitialProducts();
+
+        // Create the table with the custom table model
+        table = new JTable(tableModel);
+        
+        updateTableColors();
+
+        // Create a cell renderer for coloring the table rows
+        DefaultTableCellRenderer tableRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                           boolean hasFocus, int row, int column) {
+                Component component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+                double percentage = (double) table.getValueAt(row, 5);
+
+                if (percentage < 50) {
+                    component.setBackground(Color.RED);
+                } else if (percentage < 100) {
+                    component.setBackground(Color.YELLOW);
+                } else {
+                    component.setBackground(Color.GREEN);
+                }
+
+                return component;
+            }
+        };
+        table.setDefaultRenderer(Object.class, tableRenderer);
+
+        // Create a button for adding products
+        JButton addButton = new JButton("Додати продукт");
+        addButton.addActionListener(e -> addProduct());
+
+        // Create a button for modifying product quantity
+        JButton modifyButton = new JButton("Змінити кількість продукту");
+        modifyButton.addActionListener(e -> modifyProduct());
+
+        // Create a panel to hold the buttons
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.add(addButton);
+        buttonPanel.add(modifyButton);
+
+        // Create a scroll pane for the table
+        JScrollPane scrollPane = new JScrollPane(table);
+
+        // Create labels for displaying total cost and additional cost
+        totalCostLabel = new JLabel();
+        additionalCostLabel = new JLabel();
+
+        // Create a panel to hold the labels
+        JPanel infoPanel = new JPanel();
+        infoPanel.add(totalCostLabel);
+        infoPanel.add(additionalCostLabel);
+
+        // Add the components to the frame
+        setLayout(new BorderLayout());
+        add(scrollPane, BorderLayout.CENTER);
+        add(buttonPanel, BorderLayout.NORTH);
+        add(infoPanel, BorderLayout.SOUTH);
+
+        // Initialize the table colors and update the costs
+        updateTableColors();
+        updateCosts();
+    }
+
+    // Method to add a new product to the table
+    private void addProduct() {
+        String productName = JOptionPane.showInputDialog(this, "Введіть назву продукту:");
+        if (productName != null && !productName.isEmpty()) {
+            try {
+                double purchasePrice = Double.parseDouble(JOptionPane.showInputDialog(this, "Введіть ціну закупівлі:"));
+                String supplierPhone = JOptionPane.showInputDialog(this, "Введіть телефон постачальника:");
+                if (supplierPhone.substring(0, 5) != "+380") {
+                    JOptionPane.showMessageDialog(this, "Номер телефону повинен починатись на +380");
+                    return;
+                }
+                double requiredQuantity = Double.parseDouble(JOptionPane.showInputDialog(this,
+                        "Введіть необхідну кількість (кг):"));
+                double availableQuantityKg = Double.parseDouble(JOptionPane.showInputDialog(this,
+                        "Введіть наявну кількість (кг):"));
+
+                if (purchasePrice <= 0 || requiredQuantity <= 0 || availableQuantityKg < 0) {
+                    JOptionPane.showMessageDialog(this, "Некоректні дані. Будь ласка, введіть додатні числові значення.");
+                    return;
+                }
+
+                double percentage = (availableQuantityKg / requiredQuantity) * 100.0;
+                percentage = Math.round(percentage * 100.0) / 100.0;
+
+                tableModel.addRow(new Object[]{productName, purchasePrice, supplierPhone,
+                        requiredQuantity, availableQuantityKg, percentage});
+
+                updateTableColors();
+                updateCosts();
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Некоректний формат числових даних.");
+            }
+        }
+    }
+
+    // Method to modify the available quantity of a product
+    private void modifyProduct() {
+        int selectedRow = table.getSelectedRow();
+        if (selectedRow != -1) {
+            try {
+                double availableQuantityKg = Double.parseDouble(JOptionPane.showInputDialog(this,
+                        "Введіть нову наявну кількість (кг):"));
+
+                if (availableQuantityKg < 0) {
+                    JOptionPane.showMessageDialog(this, "Некоректні дані. Будь ласка, введіть додатнє числове значення.");
+                    return;
+                }
+
+                double requiredQuantity = (double) table.getValueAt(selectedRow, 3);
+                double percentage = (availableQuantityKg / requiredQuantity) * 100.0;
+                percentage = Math.round(percentage * 100.0) / 100.0;
+
+                tableModel.setValueAt(availableQuantityKg, selectedRow, 4);
+                tableModel.setValueAt(percentage, selectedRow, 5);
+
+                updateTableColors();
+                updateCosts();
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Некоректний формат числових даних.");
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "Виберіть продукт для зміни наявної кількості");
+        }
+    }
+
+    private void updateTableColors() {
+        DefaultTableCellRenderer renderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                           boolean hasFocus, int row, int column) {
+                Component component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+                double percentage = (double) table.getModel().getValueAt(row, 5);
+
+                if (percentage < 50) {
+                    component.setBackground(Color.RED);
+                } else if (percentage < 100) {
+                    component.setBackground(Color.YELLOW);
+                } else {
+                    component.setBackground(Color.GREEN);
+                }
+
+                return component;
+            }
+        };
+
+        // Apply the cell renderer to all columns and rows
+        for (int i = 0; i < table.getColumnModel().getColumnCount(); i++) {
+            table.getColumnModel().getColumn(i).setCellRenderer(renderer);
+        }
+
+        // Repaint the table to update the colors
+        table.repaint();
+    }
+
+    // Method to update the total cost and additional cost labels
+    private void updateCosts() {
+        double totalCost = 0.0;
+        double additionalCost = 0.0;
+
+        for (int row = 0; row < table.getRowCount(); row++) {
+            double price = (double) table.getValueAt(row, 1);
+            double requiredQuantity = (double) table.getValueAt(row, 3);
+            double availableQuantity = (double) table.getValueAt(row, 4);
+
+            totalCost += price * availableQuantity;
+
+            if (availableQuantity < requiredQuantity) {
+                additionalCost += price * (requiredQuantity - availableQuantity);
+            }
+        }
+
+        DecimalFormat decimalFormat = new DecimalFormat("#0.00");
+        totalCostLabel.setText("Загальна вартість продуктів: ₴" + decimalFormat.format(totalCost));
+        additionalCostLabel.setText("Потрібно докупити на: ₴" + decimalFormat.format(additionalCost));
+    }
+
+    private void addInitialProducts() {
+    	tableModel.addRow(new Object[]{"Помідори", 55.0, "+380123456789", 20.0, 15.0});
+    	tableModel.addRow(new Object[]{"Огірки", 40.0, "+380987654321", 40.0, 10.0});
+    	tableModel.addRow(new Object[]{"Морква", 30.0, "+380111222333", 45.0, 52.0});
+    	tableModel.addRow(new Object[]{"Цибуля", 25.0, "+380444555666", 40.0, 40.0});
+    	tableModel.addRow(new Object[]{"Картопля", 15.0, "+380777888999", 30.0, 28.0});
+    	tableModel.addRow(new Object[]{"Буряк", 20.0, "+380555666777", 50.0, 45.0});
+    	tableModel.addRow(new Object[]{"Паприка", 35.0, "+380222333444", 15.0, 5.0});
+    	tableModel.addRow(new Object[]{"Капуста", 18.0, "+380999888777", 25.0, 20.0});
+    	tableModel.addRow(new Object[]{"Яблука", 50.0, "+380111222333", 50.0, 50.0});
+    	tableModel.addRow(new Object[]{"Груші", 45.0, "+380444555666", 40.0, 38.0});
+
+        // Add more initial products as needed
+
+        // Calculate the percentage for the initial products
+        for (int row = 0; row < tableModel.getRowCount(); row++) {
+            double requiredQuantity = (double) tableModel.getValueAt(row, 3);
+            double availableQuantityKg = (double) tableModel.getValueAt(row, 4);
+            double percentage = (availableQuantityKg / requiredQuantity) * 100.0;
+
+            // Round the percentage to two decimal places
+            percentage = Math.round(percentage * 100.0) / 100.0;
+
+            tableModel.setValueAt(percentage, row, 5);
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            RestaurantProductsGUI gui = new RestaurantProductsGUI();
+            gui.setVisible(true);
+        });
+    }
+}
